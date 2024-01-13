@@ -486,6 +486,11 @@ Enabling completion for Fish:
       tostring(cfg.connection_timeout)..".")
       :argname("<seconds>")
       :convert(tonumber)
+   parser:option("--cache", "Folder to use for caching rockspecs")
+      :argname("<cache>")
+   parser:flag("--skip-config-warning", "Skip the warning for missing configuration")
+   parser:option("-e", "Execute lua script and exit")
+      :argname("<quoted_script>")
 
    -- Used internally to force the use of a particular project tree
    parser:option("--project-tree"):hidden(true)
@@ -578,6 +583,20 @@ function cmd.run_command(description, commands, external_namespace, ...)
    local parser = get_parser(description, cmd_modules)
    args = parser:parse(args)
 
+   -- Execute lua script and exit
+   if args.e then
+      local func, err = load(args.e)
+      if func then
+         local success, runtimeError = pcall(func)
+         if not success then
+             die(runtimeError)
+         end
+         os.exit(cmd.errorcodes.OK)
+      else
+         die(err)
+      end
+   end
+
    -- Compatibility for old flag
    if args.nodeps then
       args.deps_mode = "none"
@@ -617,7 +636,7 @@ function cmd.run_command(description, commands, external_namespace, ...)
       end
    end
 
-   if not lua_found and args.command ~= "config" and args.command ~= "help" then
+   if not lua_found and args.command ~= "config" and args.command ~= "help" and not args.skip_config_warning then
       util.warning(tried ..
                    "\nModules may not install with the correct configurations. " ..
                    "You may want to configure the path prefix to your build " ..
@@ -660,6 +679,10 @@ function cmd.run_command(description, commands, external_namespace, ...)
    -- if running as superuser, use system cache dir
    if fs.is_superuser() then
       cfg.local_cache = dir.path(fs.system_cache_dir(), "luarocks")
+   end
+
+   if args.cache then
+      cfg.local_cache = args.cache
    end
 
    if args.no_manifest then

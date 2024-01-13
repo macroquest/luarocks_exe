@@ -1,14 +1,14 @@
 
 # "i686-w64-mingw32" or "x86_64-w64-mingw32"
-MINGW_PREFIX?=i686-w64-mingw32
+MINGW_PREFIX?=x86_64-w64-mingw32
 # sysroot of your mingw-w64 installation
-MINGW_SYSROOT=/usr/lib/mingw-w64-sysroot/$(MINGW_PREFIX)
+MINGW_SYSROOT=/usr/$(MINGW_PREFIX)
 # "mingw" or "mingw64"
 OPENSSL_PLATFORM=mingw
 # Versions of dependencies
 LIBLUA_VERSION=5.4.3
 OPENSSL_VERSION=1.0.2o
-ZLIB_VERSION=1.2.12
+ZLIB_VERSION=1.3
 BZIP2_VERSION=1.0.6
 
 WINDOWS_DEPS_DIR=windows-deps-$(MINGW_PREFIX)
@@ -24,7 +24,7 @@ windows-binary: $(WINDOWS_DEPS_DIR)/lib/liblua.a $(WINDOWS_DEPS_DIR)/lib/libssl.
 
 $(BUILD_WINDOWS_DEPS_DIR)/lua-$(LIBLUA_VERSION).tar.gz:
 	mkdir -p $(@D)
-	cd $(BUILD_WINDOWS_DEPS_DIR) && curl -OL https://www.lua.org/ftp/lua-$(LIBLUA_VERSION).tar.gz
+	cd $(BUILD_WINDOWS_DEPS_DIR) && wget https://www.lua.org/ftp/lua-$(LIBLUA_VERSION).tar.gz
 $(BUILD_WINDOWS_DEPS_DIR)/lua-$(LIBLUA_VERSION): $(BUILD_WINDOWS_DEPS_DIR)/lua-$(LIBLUA_VERSION).tar.gz
 	cd $(BUILD_WINDOWS_DEPS_DIR) && tar zxvpf lua-$(LIBLUA_VERSION).tar.gz
 $(WINDOWS_DEPS_DIR)/lib/liblua.a: $(BUILD_WINDOWS_DEPS_DIR)/lua-$(LIBLUA_VERSION)
@@ -36,7 +36,7 @@ $(WINDOWS_DEPS_DIR)/lib/liblua.a: $(BUILD_WINDOWS_DEPS_DIR)/lua-$(LIBLUA_VERSION
 
 $(BUILD_WINDOWS_DEPS_DIR)/openssl-$(OPENSSL_VERSION).tar.gz:
 	mkdir -p $(@D)
-	cd $(BUILD_WINDOWS_DEPS_DIR) && curl -OL https://www.openssl.org/source/openssl-$(OPENSSL_VERSION).tar.gz
+	cd $(BUILD_WINDOWS_DEPS_DIR) && wget https://www.openssl.org/source/openssl-$(OPENSSL_VERSION).tar.gz
 $(BUILD_WINDOWS_DEPS_DIR)/openssl-$(OPENSSL_VERSION): $(BUILD_WINDOWS_DEPS_DIR)/openssl-$(OPENSSL_VERSION).tar.gz
 	cd $(BUILD_WINDOWS_DEPS_DIR) && tar zxvpf openssl-$(OPENSSL_VERSION).tar.gz
 $(WINDOWS_DEPS_DIR)/lib/libssl.a: $(BUILD_WINDOWS_DEPS_DIR)/openssl-$(OPENSSL_VERSION)
@@ -46,7 +46,7 @@ $(WINDOWS_DEPS_DIR)/lib/libssl.a: $(BUILD_WINDOWS_DEPS_DIR)/openssl-$(OPENSSL_VE
 
 $(BUILD_WINDOWS_DEPS_DIR)/zlib-$(ZLIB_VERSION).tar.gz:
 	mkdir -p $(@D)
-	cd $(BUILD_WINDOWS_DEPS_DIR) && curl -OL https://www.zlib.net/zlib-$(ZLIB_VERSION).tar.gz
+	cd $(BUILD_WINDOWS_DEPS_DIR) && wget https://www.zlib.net/zlib-$(ZLIB_VERSION).tar.gz
 $(BUILD_WINDOWS_DEPS_DIR)/zlib-$(ZLIB_VERSION): $(BUILD_WINDOWS_DEPS_DIR)/zlib-$(ZLIB_VERSION).tar.gz
 	cd $(BUILD_WINDOWS_DEPS_DIR) && tar zxvpf zlib-$(ZLIB_VERSION).tar.gz
 $(WINDOWS_DEPS_DIR)/lib/libz.a: $(BUILD_WINDOWS_DEPS_DIR)/zlib-$(ZLIB_VERSION)
@@ -61,7 +61,7 @@ $(WINDOWS_DEPS_DIR)/lib/libz.a: $(BUILD_WINDOWS_DEPS_DIR)/zlib-$(ZLIB_VERSION)
 
 $(BUILD_WINDOWS_DEPS_DIR)/bzip2-$(BZIP2_VERSION).tar.gz:
 	mkdir -p $(@D)
-	cd $(BUILD_WINDOWS_DEPS_DIR) && curl -OL http://downloads.sourceforge.net/project/bzip2/bzip2-$(BZIP2_VERSION).tar.gz
+	cd $(BUILD_WINDOWS_DEPS_DIR) && wget http://downloads.sourceforge.net/project/bzip2/bzip2-$(BZIP2_VERSION).tar.gz
 $(BUILD_WINDOWS_DEPS_DIR)/bzip2-$(BZIP2_VERSION): $(BUILD_WINDOWS_DEPS_DIR)/bzip2-$(BZIP2_VERSION).tar.gz
 	cd $(BUILD_WINDOWS_DEPS_DIR) && tar zxvpf bzip2-$(BZIP2_VERSION).tar.gz
 $(WINDOWS_DEPS_DIR)/lib/libbz2.a: $(BUILD_WINDOWS_DEPS_DIR)/bzip2-$(BZIP2_VERSION)
