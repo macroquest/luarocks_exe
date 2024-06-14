@@ -4,9 +4,9 @@ local cfg = require("luarocks.core.cfg")
 local test_env = require("spec.util.test_env")
 local lfs = require("lfs")
 
-describe("luarocks.rockspecs", function()
+describe("luarocks.rockspecs #unit", function()
 
-   setup(function()
+   lazy_setup(function()
       cfg.init()
    end)
 

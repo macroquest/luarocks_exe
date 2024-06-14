@@ -33,9 +33,26 @@ function fetch.fetch_caching(url, mirroring)
    local name = repo_url:gsub("[/:]","_")
    local cache_dir = dir.path(cfg.local_cache, name)
    local ok = fs.make_dir(cache_dir)
-   local lock = ok and fs.lock_access(cache_dir)
+
+   local cachefile = dir.path(cache_dir, filename)
+   local checkfile = cachefile .. ".check"
+
+   if (fs.file_age(checkfile) < 10 or
+      cfg.aggressive_cache and (not name:match("^manifest"))) and fs.exists(cachefile)
+   then
+      return cachefile, nil, nil, true
+   end
+
+   local lock, errlock
+   if ok then
+      lock, errlock = fs.lock_access(cache_dir)
+   end
+
    if not (ok and lock) then
       cfg.local_cache = fs.make_temp_dir("local_cache")
+      if not cfg.local_cache then
+         return nil, "Failed creating temporary local_cache directory"
+      end
       cache_dir = dir.path(cfg.local_cache, name)
       ok = fs.make_dir(cache_dir)
       if not ok then
@@ -44,17 +61,21 @@ function fetch.fetch_caching(url, mirroring)
       lock = fs.lock_access(cache_dir)
    end
 
-   local cachefile = dir.path(cache_dir, filename)
-   if cfg.aggressive_cache and (not name:match("^manifest")) and fs.exists(cachefile) then
-      fs.unlock_access(lock)
-      return cachefile, nil, nil, true
-   end
-
    local file, err, errcode, from_cache = fetch.fetch_url(url, cachefile, true, mirroring)
-   fs.unlock_access(lock)
    if not file then
+      fs.unlock_access(lock)
       return nil, err or "Failed downloading "..url, errcode
    end
+
+   local fd, err = io.open(checkfile, "wb")
+   if err then
+      fs.unlock_access(lock)
+      return nil, err
+   end
+   fd:write("!")
+   fd:close()
+
+   fs.unlock_access(lock)
    return file, nil, nil, from_cache
 end
 
@@ -98,7 +119,7 @@ local function download_with_mirrors(url, filename, cache, servers)
       end
    end
 
-   return nil, err
+   return nil, err, "network"
 end
 
 --- Fetch a local or remote file.
@@ -130,7 +151,7 @@ function fetch.fetch_url(url, filename, cache, mirroring)
 
    local protocol, pathname = dir.split_url(url)
    if protocol == "file" then
-      local fullname = dir.normalize(fs.absolute_name(pathname))
+      local fullname = fs.absolute_name(pathname)
       if not fs.exists(fullname) then
          local hint = (not pathname:match("^/"))
                       and (" - note that given path in rockspec is not absolute: " .. url)
@@ -138,7 +159,7 @@ function fetch.fetch_url(url, filename, cache, mirroring)
          return nil, "Local file not found: " .. fullname .. hint
       end
       filename = filename or dir.base_name(pathname)
-      local dstname = dir.normalize(fs.absolute_name(dir.path(".", filename)))
+      local dstname = fs.absolute_name(dir.path(".", filename))
       local ok, err
       if fullname == dstname then
          ok = true
@@ -158,7 +179,7 @@ function fetch.fetch_url(url, filename, cache, mirroring)
          ok, name, from_cache = fs.download(url, filename, cache)
       end
       if not ok then
-         return nil, "Failed downloading "..url..(name and " - "..name or ""), "network"
+         return nil, "Failed downloading "..url..(name and " - "..name or ""), from_cache
       end
       return name, nil, nil, from_cache
    else
@@ -209,7 +230,9 @@ function fetch.fetch_url_at_temp_dir(url, tmpname, filename, cache)
             file = dir.path(temp_dir, filename)
             fs.copy(cachefile, file)
          end
-      else
+      end
+
+      if not file then
          file, err, errcode = fetch.fetch_url(url, filename, cache)
       end
 

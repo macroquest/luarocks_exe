@@ -6,7 +6,7 @@ local vars = {}
 
 
 vars.PREFIX = nil
-vars.VERSION = "3.9"
+vars.VERSION = "3.11"
 vars.SYSCONFDIR = nil
 vars.CONFBACKUPDIR = nil
 vars.SYSCONFFILENAME = nil
@@ -15,12 +15,13 @@ vars.TREE_ROOT = nil
 vars.TREE_BIN = nil
 vars.TREE_LMODULE = nil
 vars.TREE_CMODULE = nil
-vars.LUA_INTERPRETER = nil
+vars.LUA = nil
 vars.LUA_PREFIX = nil
+vars.LUA_DIR = nil
 vars.LUA_BINDIR = nil
 vars.LUA_INCDIR = nil
 vars.LUA_LIBDIR = nil
-vars.LUA_LIBNAME = nil
+vars.LUALIB = nil
 vars.LUA_VERSION = "5.1"
 vars.LUA_SHORTV = nil   -- "51"
 vars.LUA_RUNTIME = nil
@@ -320,7 +321,7 @@ local function look_for_interpreter(directory)
 						end
 					end
 
-					vars.LUA_INTERPRETER = name
+					vars.LUA = full_name
 					vars.LUA_BINDIR = dir
 					return true
 				end
@@ -338,7 +339,7 @@ local function look_for_link_libraries(directory)
 	-- MinGW does not generate .lib, nor needs it to link, but MSVC does,
 	-- so .lib must be listed first to ensure they are found first if present,
 	-- to prevent MSVC trying to link to a .dll, which won't work.
-	local names = {S"lua$LUA_VERSION.lib", S"lua$LUA_SHORTV.lib", S"lua$LUA_VERSION.dll", S"lua$LUA_SHORTV.dll", "liblua.dll.a"}
+	local names = {S"lua$LUA_VERSION.lib", S"lua$LUA_SHORTV.lib", S"liblua$LUA_SHORTV.a", S"lua$LUA_VERSION.dll", S"lua$LUA_SHORTV.dll", "liblua.dll.a"}
 	local directories
 	if vars.LUA_LIBDIR then
 		directories = {vars.LUA_LIBDIR}
@@ -352,7 +353,7 @@ local function look_for_link_libraries(directory)
 			print("    checking for " .. full_name)
 			if exists(full_name) then
 				vars.LUA_LIBDIR = dir
-				vars.LUA_LIBNAME = name
+				vars.LUALIB = name
 				print("       Found " .. name)
 				return true
 			end
@@ -398,7 +399,7 @@ end
 
 local function get_runtime()
 	local f
-	vars.LUA_RUNTIME, f = pe.msvcrt(vars.LUA_BINDIR.."\\"..vars.LUA_INTERPRETER)
+	vars.LUA_RUNTIME, f = pe.msvcrt(vars.LUA)
 	if type(vars.LUA_RUNTIME) ~= "string" then
 		-- analysis failed, issue a warning
 		vars.LUA_RUNTIME = "MSVCR80"
@@ -411,9 +412,9 @@ end
 
 local function get_architecture()
 	-- detect processor arch interpreter was compiled for
-	local proc = (pe.parse(vars.LUA_BINDIR.."\\"..vars.LUA_INTERPRETER) or {}).Machine
+	local proc = (pe.parse(vars.LUA) or {}).Machine
 	if not proc then
-		die("Could not detect processor architecture used in "..vars.LUA_INTERPRETER)
+		die("Could not detect processor architecture used in "..vars.LUA)
 	end
 	print("arch: " .. proc .. " -> " .. pe.const.Machine[proc])
 	proc = pe.const.Machine[proc]  -- collect name from constant value
@@ -633,6 +634,14 @@ local function get_possible_lua_directories()
 	return directories
 end
 
+local function strip_bin(bindir)
+	bindir = bindir:gsub("[/\\]*$", "")
+	if bindir:upper():match("[/\\]BIN") then
+		bindir = bindir:sub(1, -5):gsub("[/\\]*$", "")
+	end
+	return bindir
+end
+
 local function look_for_lua_install ()
 	print("Looking for Lua interpreter")
 	if vars.LUA_BINDIR and vars.LUA_LIBDIR and vars.LUA_INCDIR then
@@ -642,6 +651,7 @@ local function look_for_lua_install ()
 		then
 			if get_runtime() then
 				print("Runtime check completed.")
+				vars.LUA_DIR = vars.LUA_PREFIX or strip_bin(vars.LUA_BINDIR)
 				return true
 			end
 		end
@@ -659,6 +669,7 @@ local function look_for_lua_install ()
 						print("Headers found, checking runtime to use...")
 						if get_runtime() then
 							print("Runtime check completed.")
+							vars.LUA_DIR = directory
 							return true
 						end
 					end
@@ -862,11 +873,12 @@ vars.INCDIR = S"$PREFIX\\include"
 vars.LUA_SHORTV = vars.LUA_VERSION:gsub("%.", "")
 
 if INSTALL_LUA then
-	vars.LUA_INTERPRETER = "lua5.1"
+	vars.LUA = vars.BINDIR .. "\\lua5.1.exe"
+	vars.LUA_DIR = vars.PREFIX
 	vars.LUA_BINDIR = vars.BINDIR
 	vars.LUA_LIBDIR = vars.LIBDIR
 	vars.LUA_INCDIR = vars.INCDIR
-	vars.LUA_LIBNAME = "lua5.1.lib"
+	vars.LUALIB = "lua5.1.lib"
 	vars.LUA_RUNTIME = "MSVCR80"
 	vars.UNAME_M = "x86"
 else
@@ -875,6 +887,9 @@ else
 	end
     vars.UNAME_M = get_architecture()  -- can only do when installation was found
 end
+
+assert(vars.LUA)
+assert(vars.LUA_DIR)
 
 -- check location of system tree
 if not vars.TREE_ROOT then
@@ -918,12 +933,12 @@ LuaRocks        : $PREFIX
 Config file     : $CONFIG_FILE
 Rocktree        : $TREE_ROOT
 
-Lua interpreter : $LUA_BINDIR\$LUA_INTERPRETER
+Lua interpreter : $LUA
     binaries    : $LUA_BINDIR
     libraries   : $LUA_LIBDIR
     includes    : $LUA_INCDIR
     architecture: $UNAME_M
-    binary link : $LUA_LIBNAME with runtime $LUA_RUNTIME.dll
+    binary link : $LUALIB with runtime $LUA_RUNTIME.dll
 ]])
 
 if USE_MINGW then
@@ -1031,7 +1046,7 @@ IF NOT "%LUA_PATH_5_3%"=="" (
    SET "LUA_PATH_5_3=$LUADIR\?.lua;$LUADIR\?\init.lua;%LUA_PATH_5_3%"
 )
 SET "PATH=$BINDIR;%PATH%"
-"$LUA_BINDIR\$LUA_INTERPRETER" "$BINDIR\]]..c..[[.lua" %*
+"$LUA" "$BINDIR\]]..c..[[.lua" %*
 SET EXITCODE=%ERRORLEVEL%
 IF NOT "%EXITCODE%"=="2" GOTO EXITLR
 
@@ -1087,10 +1102,12 @@ vars.SYSTEM = USE_MINGW and "mingw" or "windows"
 local f = io.open(hardcoded_lua, "w")
 f:write(S[=[
 return {
+   LUA_DIR=[[$LUA_DIR]],
    LUA_INCDIR=[[$LUA_INCDIR]],
    LUA_LIBDIR=[[$LUA_LIBDIR]],
    LUA_BINDIR=[[$LUA_BINDIR]],
-   LUA_INTERPRETER=[[$LUA_INTERPRETER]],
+   LUA_VERSION=[[$LUA_VERSION]],
+   LUA=[[$LUA]],
    SYSTEM = [[$SYSTEM]],
    PROCESSOR = [[$UNAME_M]],
    PREFIX = [[$PREFIX]],
@@ -1143,7 +1160,6 @@ if USE_MINGW and vars.LUA_RUNTIME == "MSVCRT" then
 else
 	f:write("    MSVCRT = '"..vars.LUA_RUNTIME.."',\n")
 end
-f:write(S"    LUALIB = '$LUA_LIBNAME',\n")
 if USE_MINGW then
         f:write(S[[
     CC = $MINGW_CC,
@@ -1156,6 +1172,7 @@ if USE_MINGW then
 end
 f:write("}\n")
 f:write("verbose = false   -- set to 'true' to enable verbose output\n")
+f:write("fs_use_modules = false   -- prevent LuaRocks itself from using installed modules and blocking their files from removal \n")
 f:close()
 
 print(S"Created LuaRocks config file: $CONFIG_FILE")

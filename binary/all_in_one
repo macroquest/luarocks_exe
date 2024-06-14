@@ -159,10 +159,6 @@ local function write_hardcoded_module(dir)
       IS_BINARY = true,
 
       SYSCONFDIR = if_platform("unix", SYSCONFDIR),
-
-      LUA_DIR = if_platform("unix", cfg.variables.LUA_DIR),
-      LUA_BINDIR = if_platform("unix", cfg.variables.LUA_BINDIR),
-      LUA_INTERPRETER = if_platform("unix", cfg.lua_interpreter),
    }
 
    local name = dir .. "/luarocks/core/hardcoded.lua"
@@ -435,27 +431,6 @@ end
 
 --------------------------------------------------------------------------------
 
-local function readFile(path)
-   local file = io.open(path, "r")
-   if not file then return nil end
-   local content = file:read("*a")
-   file:close()
-   return content
-end
-
--- Function to write contents to a file
-local function writeFile(path, content)
-   local file = io.open(path, "w")
-   if not file then return false end
-   file:write(content)
-   file:close()
-   return true
-end
-
----------------------------------------------------------------------------------
-
-
-
 local function main()
 
    os.remove("src/luarocks/core/hardcoded.lua")
@@ -480,6 +455,7 @@ local function main()
          LUA_DIR = LUA_DIR,
          LIBFLAG = "-static",
          PWD = "pwd",
+         MKDIR = "mkdir",
       },
       platforms = if_platform("windows", { "windows", "win32", "mingw32" }),
       external_deps_dirs = if_platform("windows", { CROSSCOMPILER_SYSROOT, fs.current_dir() .. "/windows-deps-" .. TRIPLET }),
@@ -487,48 +463,36 @@ local function main()
 
    local dependencies = {
       md5 = "md5",
+      luasocket = "./binary/luasocket-3.1.0-1.rockspec",
+      luasec = "./binary/luasec-1.3.2-1.rockspec",
       ["lua-zlib"] = "./binary/lua-zlib-1.2-0.rockspec",
       ["lua-bz2"] = "./binary/lua-bz2-0.2.1-1.rockspec",
       luaposix = if_platform("unix", "./binary/luaposix-35.1-1.rockspec"),
-      luasocket = "luasocket",
-      luasec = "./binary/luasec-1.0.2-1.rockspec",
       luafilesystem = "luafilesystem",
-      dkjson = "dkjson",
+   }
+
+   local dependency_order = {
+      "md5",
+      "luasocket", "luasec",
+      "lua-zlib",
+      "lua-bz2",
+      "luaposix",
+      "luafilesystem",
    }
 
    fs.make_dir(LUA_MODULES)
-   for name, arg in pairs(dependencies) do
-      print("----------------------------------------------------------------")
-      print(name)
-      print("----------------------------------------------------------------")
-      local vers = manif.get_versions(queries.from_dep_string(name), "one")
-      if not next(vers) then
-         -- Knightly Edit to force config update
-         local content = readFile(CONFIG_FILE)
-         if not content then
-            error("Failed to read the config file at "..CONFIG_FILE)
-         end
-         -- Add or update the LUA_INCDIR line
-         local luaIncDirLine = '   LUA_INCDIR = "/usr/include/lua5.4",\n'
-         if not content:find("LUA_INCDIR") then
-            -- Add new line
-            content = content:gsub("(variables%s*=%s*{)", "%1\n" .. luaIncDirLine)
-            -- Write the updated content back to the config file
-            if not writeFile(CONFIG_FILE, content) then
-               error("Failed to write to the config file at "..CONFIG_FILE)
+   for _, name in ipairs(dependency_order) do
+      local use = dependencies[name]
+      if use then
+         print("----------------------------------------------------------------")
+         print(name)
+         print("----------------------------------------------------------------")
+         local vers = manif.get_versions(queries.from_dep_string(name), "one")
+         if not next(vers) then
+            local ok = os.execute("LUAROCKS_CONFIG='" .. CONFIG_FILE .. "' ./luarocks install --no-project '--tree=" .. LUA_MODULES .. "' " .. use)
+            if ok ~= 0 and ok ~= true then
+               error("Failed building dependency: " .. name)
             end
-         end
-
-         local ok = 1
-         if name == 'luasocket' and string.find(CONFIG_FILE, 'mingw') then
-            print("LUAROCKS_CONFIG='" .. CONFIG_FILE .. "' ./luarocks install --only-server https://raw.githubusercontent.com/macroquest/moonrocks/luarocks_build/ --no-project '--tree=" .. LUA_MODULES .. "' " .. arg)
-            ok = os.execute("LUAROCKS_CONFIG='" .. CONFIG_FILE .. "' ./luarocks install --only-server https://raw.githubusercontent.com/macroquest/moonrocks/luarocks_build/ --no-project '--tree=" .. LUA_MODULES .. "' " .. arg)
-         else
-           print("LUAROCKS_CONFIG='" .. CONFIG_FILE .. "' ./luarocks install --no-project '--tree=" .. LUA_MODULES .. "' " .. arg)
-           ok = os.execute("LUAROCKS_CONFIG='" .. CONFIG_FILE .. "' ./luarocks install --no-project '--tree=" .. LUA_MODULES .. "' " .. arg)
-         end
-         if ok ~= 0 and ok ~= true then
-            error("Failed building dependency: " .. name)
          end
       end
    end
